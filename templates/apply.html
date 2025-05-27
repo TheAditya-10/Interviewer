@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Apply for a Job</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+  <div class="max-w-xl mx-auto bg-white shadow-md rounded-lg p-6">
+    <h2 class="text-2xl font-semibold mb-6 text-center">Job Application</h2>
+    <form id="applicationForm" enctype="multipart/form-data">
+      <div class="mb-4">
+        <label for="job_id" class="block mb-2 text-sm font-medium text-gray-700">Select Job</label>
+        <select id="job_id" name="job_id" class="w-full border border-gray-300 rounded p-2" required></select>
+      </div>
+
+      <div class="mb-4">
+        <label class="block mb-2 text-sm font-medium text-gray-700">Have you applied before?</label>
+        <select id="applied_before" class="w-full border rounded p-2" required>
+          <option value="no">No</option>
+          <option value="yes">Yes</option>
+        </select>
+      </div>
+
+      <div class="mb-4" id="cid_field" style="display:none;">
+        <label for="c_id" class="block mb-2 text-sm font-medium text-gray-700">Enter your Candidate ID (C_id)</label>
+        <input type="number" id="c_id" name="c_id" class="w-full border rounded p-2">
+      </div>
+
+      <div class="mb-4" id="resume_field">
+        <label for="resume" class="block mb-2 text-sm font-medium text-gray-700">Upload Resume (PDF)</label>
+        <input type="file" id="resume" name="resume" accept="application/pdf" class="w-full border rounded p-2">
+      </div>
+
+      <div class="mb-4">
+        <label for="interview_date" class="block mb-2 text-sm font-medium text-gray-700">Interview Date</label>
+        <input type="date" id="interview_date" name="interview_date" class="w-full border rounded p-2" required>
+      </div>
+
+      <div class="mb-4">
+        <label for="interview_time" class="block mb-2 text-sm font-medium text-gray-700">Interview Time</label>
+        <input type="time" id="interview_time" name="interview_time" class="w-full border rounded p-2" required>
+      </div>
+
+      <div class="mb-4" id="password_field" style="display:none;">
+        <label for="password" class="block mb-2 text-sm font-medium text-gray-700">Password</label>
+        <input type="password" id="password" name="password" class="w-full border rounded p-2">
+      </div>
+      <div class="mb-4" id="create_password_field" style="display:none;">
+        <label for="create_password" class="block mb-2 text-sm font-medium text-gray-700">Create Password</label>
+        <input type="password" id="create_password" name="create_password" class="w-full border rounded p-2">
+      </div>
+
+      <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Submit</button>
+    </form>
+    <p id="message" class="mt-4 text-center text-green-600 hidden">Application submitted successfully!</p>
+  </div>
+
+  <script>
+    // Fetch jobs dynamically
+    axios.get('http://localhost:5000/api/jobs')
+      .then(response => {
+        const jobSelect = document.getElementById('job_id');
+        response.data.jobs.forEach(job => {
+          const option = document.createElement('option');
+          option.value = job.J_id;
+          option.textContent = `Job ID ${job.J_id} - ${job.min_qualification}`;
+          jobSelect.appendChild(option);
+        });
+      })
+      .catch(err => console.error('Error loading jobs:', err));
+
+    // Toggle Candidate ID field based on previous application
+    document.getElementById('applied_before').addEventListener('change', function() {
+      if (this.value === 'yes') {
+        document.getElementById('cid_field').style.display = '';
+        document.getElementById('password_field').style.display = '';
+        document.getElementById('resume_field').style.display = 'none';
+        document.getElementById('create_password_field').style.display = 'none';
+        document.getElementById('resume').required = false;
+        document.getElementById('c_id').required = true;
+        document.getElementById('password').required = true;
+        document.getElementById('create_password').required = false;
+      } else {
+        document.getElementById('cid_field').style.display = 'none';
+        document.getElementById('password_field').style.display = 'none';
+        document.getElementById('resume_field').style.display = '';
+        document.getElementById('create_password_field').style.display = '';
+        document.getElementById('resume').required = true;
+        document.getElementById('c_id').required = false;
+        document.getElementById('password').required = false;
+        document.getElementById('create_password').required = true;
+      }
+    });
+
+    // Submit form
+    document.getElementById('applicationForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const form = new FormData(this);
+
+      axios.post('http://localhost:5000/api/apply', form, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+      .then(response => {
+        document.getElementById('message').classList.remove('hidden');
+        this.reset();
+      })
+      .catch(err => alert('Error: ' + err.response.data.message));
+    });
+
+    // Set initial state on page load
+    document.getElementById('applied_before').dispatchEvent(new Event('change'));
+  </script>
+</body>
+</html>

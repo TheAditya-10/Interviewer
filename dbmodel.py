@@ -1,24 +1,11 @@
 from flask_sqlalchemy import SQLAlchemy
-import enum
-import config  # <-- Change this line
 
 db = SQLAlchemy()
-
-def init_db(app):
-    app.config["SQLALCHEMY_DATABASE_URI"] = config.SQLALCHEMY_DATABASE_URI
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = config.SQLALCHEMY_TRACK_MODIFICATIONS
-    db.init_app(app)
-
-class ExperienceLevel(enum.Enum):
-    Intern = "Intern"
-    Fressher = "Fressher"
-    Intermediate = "Intermediate"
-    Expert = "Expert"
 
 class Job(db.Model):
     __tablename__ = 'job'
     J_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    required_experience = db.Column(db.Enum(ExperienceLevel), nullable=False)
+    required_experience = db.Column(db.String(50), nullable=False)
     skill_req = db.Column(db.JSON, nullable=False)
     min_qualification = db.Column(db.String(255), nullable=False)
     soft_skill_req = db.Column(db.JSON, nullable=False)
@@ -28,11 +15,14 @@ class Job(db.Model):
 class Candidate(db.Model):
     __tablename__ = 'candidate'
     C_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    skills = db.Column(db.JSON, nullable=False)
-    soft_skills = db.Column(db.JSON, nullable=False)
-    achievements = db.Column(db.JSON, nullable=False)
-    experience = db.Column(db.Enum(ExperienceLevel), nullable=False)
-    max_qualification = db.Column(db.String(255), nullable=False)
+    name = db.Column(db.String(255))
+    dob = db.Column(db.Date)
+    password = db.Column(db.String(255))
+    skills = db.Column(db.JSON)
+    soft_skills = db.Column(db.JSON)
+    achievements = db.Column(db.JSON)
+    experience = db.Column(db.String(50))
+    max_qualification = db.Column(db.String(255))
 
     interviews = db.relationship("Interview", back_populates="candidate")
 
@@ -44,7 +34,7 @@ class Interview(db.Model):
     skill_order = db.Column(db.JSON, nullable=False)
     report = db.Column(db.String(1024), nullable=True)
     start_datetime = db.Column(db.DateTime, nullable=False)
-    duration = db.Column(db.Interval, nullable=False)
+    duration = db.Column(db.Integer, nullable=False)  # duration in minutes
 
     __table_args__ = (
         db.PrimaryKeyConstraint('J_id', 'C_id'),
