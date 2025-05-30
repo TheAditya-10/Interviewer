@@ -87,7 +87,7 @@
         response.data.jobs.forEach(job => {
           const option = document.createElement('option');
           option.value = job.J_id;
-          option.textContent = `Job ID ${job.J_id} - ${job.min_qualification}`;
+          option.textContent = `Job ID ${job.J_id} - ${job.skill_req}`;
           jobSelect.appendChild(option);
         });
       })

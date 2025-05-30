@@ -8,22 +8,23 @@ model = ChatOllama(model="phi3:mini", temperature=0.7, max_tokens=512)
 strOutputParser = StrOutputParser()
 
 system_prompt = PromptTemplate( 
-    input_variables=["candidate_info", "resume_text", "job_description"],
+    input_variables=["candidate_info", "job_info", "interview_info"],
     template=(
             "You are a professional interviewer bot going to take interview for the position described below. \n" 
             "Candidate responses will be going to add into chat history one by one \n"
             "You have ask first question, start with ice breaker or intro question based on the following information.\n"
             "Candidate Information:\n{candidate_info}\n"
-            "Resume:\n{resume_text}\n"
-            "Job Description:\n{job_description}\n\n"
+            "Job Information:\n{job_info}\n"
+            "List of skills that matches in the candidate resume which are required for the job role:\n{interview_info}\n\n"
             "Be professional and concise.\n"
             "Start the interview now."
         ),
 )
 question_prompt = PromptTemplate(
-    input_variables=["messages"],
+    input_variables=["messages", "interview_info"],
     template=(
             "You are a professional interviewer taking interview \n"
+            "Just to keep you remind these are the List of skills that matches in the candidate resume which are required for the job role:\n{interview_info}\n \n"
             "Here is the whole chat of the interview untill now: {messages}\n"
             "You have just ask next question."
             "These are the rules you have to take care while asking for next question or while analysing the responses:\n"
@@ -39,23 +40,23 @@ question_prompt = PromptTemplate(
         ),
 )
 
-def get_first_question(candidate_info, resume_text, job_description):
+def get_first_question(candidate_info, job_info, interview_info):
     question_chain = system_prompt | model | strOutputParser
     first_question = question_chain.invoke({
         "candidate_info": candidate_info,
-        "resume_text": resume_text,
-        "job_description": job_description
+        "job_info": job_info,
+        "interview_info": interview_info
     })
     messages = [AIMessage(content=first_question)]
     return first_question, messages
 
-def get_next_question(messages):
+def get_next_question(messages, interview_info):
     interview_chain = question_prompt | model | strOutputParser
     chat_history = ""
     for msg in messages:
         role = "AI" if isinstance(msg, AIMessage) else "Candidate"
         chat_history += f"{role}: {msg.content}\n"
-    next_q = interview_chain.invoke({"messages": chat_history})
+    next_q = interview_chain.invoke({"messages": chat_history, "interview_info": interview_info})
     messages.append(AIMessage(content=next_q))
     return next_q, messages
 
@@ -63,22 +64,4 @@ def record_answer(messages, answer):
     messages.append(HumanMessage(content=answer))
     return messages
 
-# --- DEMO RUN ---
-if __name__ == "__main__":
-    candidate_info = "Name: Aditya\nExperience: Fresher"
-    resume_text = "Experienced Python developer with expertise in ML, Flask, Deep learning databases."
-    job_description = "Looking for a backend developer skilled in Python, Django, ML."
 
-    # Start interview
-    question, messages = get_first_question(candidate_info, resume_text, job_description)
-    print("AI:", question)
-
-    # Simulate a conversation
-    while True:
-        answer = input("You: ")
-        if answer.strip().lower() == "bye":
-            print("Interview ended.")
-            break
-        messages = record_answer(messages, answer)
-        question, messages = get_next_question(messages)
-        print("AI:", question)

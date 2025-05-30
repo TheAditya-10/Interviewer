@@ -26,38 +26,16 @@
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
-    .chat-bubble-ai {
-      background: #6366f1;
-      color: #fff;
-      border-radius: 1.2rem 1.2rem 1.2rem 0.3rem;
-      padding: 1rem 1.2rem;
-      margin-bottom: 0.5rem;
-      max-width: 80%;
-      align-self: flex-start;
-      box-shadow: 0 2px 8px 0 rgba(99,102,241,0.08);
+    .avatar-shadow {
+      box-shadow: 0 8px 32px 0 rgba(99,102,241,0.15);
     }
-    .chat-bubble-user {
-      background: #06b6d4;
-      color: #fff;
-      border-radius: 1.2rem 1.2rem 0.3rem 1.2rem;
-      padding: 1rem 1.2rem;
-      margin-bottom: 0.5rem;
-      max-width: 80%;
-      align-self: flex-end;
-      box-shadow: 0 2px 8px 0 rgba(6,182,212,0.08);
+    .mic-btn.recording {
+      background: #ef4444 !important;
+      color: #fff !important;
+      border-color: #ef4444 !important;
     }
-    .voice-btn {
-      background: #f0fdfa;
-      border: 2px solid #06b6d4;
-      color: #06b6d4;
-      border-radius: 9999px;
-      padding: 0.5rem 0.9rem;
-      margin-left: 0.5rem;
-      transition: background 0.2s, color 0.2s;
-    }
-    .voice-btn:hover {
-      background: #06b6d4;
-      color: #fff;
+    .mic-btn {
+      transition: background 0.2s, color 0.2s, border 0.2s;
     }
   </style>
 </head>
@@ -67,7 +45,8 @@
   <div class="absolute bottom-0 right-0 w-96 h-96 bg-cyan-200 rounded-full opacity-30 blur-2xl -z-10 animate-pulse"></div>
   <div class="absolute top-1/2 left-1/2 w-40 h-40 bg-purple-200 rounded-full opacity-20 blur-2xl -z-10 animate-pulse"></div>
 
-  <div class="flex items-center justify-center min-h-screen">
+  <!-- Centered login, interview list, instructions -->
+  <div id="center-ui" class="flex items-center justify-center min-h-screen">
     <div class="glass p-6 md:p-10 w-full max-w-2xl mx-4 flex flex-col gap-8">
       <!-- Step 1: Candidate Login -->
       <div id="login-section">
@@ -89,23 +68,7 @@
       <!-- Step 2: List of Scheduled Interviews -->
       <div id="interview-list-section" class="hidden">
         <h3 class="text-2xl font-bold mb-4 gradient-text text-center">Your Scheduled Interviews</h3>
-        <div id="interview-list" class="space-y-4 mb-6">
-          <!-- Dummy interviews for now -->
-          <div class="flex items-center justify-between bg-blue-50 rounded-lg p-4 shadow">
-            <div>
-              <div class="font-semibold">Job ID: 101</div>
-              <div class="text-gray-600 text-sm">Date: 2025-06-01 | Time: 15:00</div>
-            </div>
-            <button class="start-interview-btn bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold" data-interview="101">Start</button>
-          </div>
-          <div class="flex items-center justify-between bg-blue-50 rounded-lg p-4 shadow">
-            <div>
-              <div class="font-semibold">Job ID: 102</div>
-              <div class="text-gray-600 text-sm">Date: 2025-06-03 | Time: 11:30</div>
-            </div>
-            <button class="start-interview-btn bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold" data-interview="102">Start</button>
-          </div>
-        </div>
+        <div id="interview-list" class="space-y-4 mb-6"></div>
       </div>
 
       <!-- Step 3: Instructions -->
@@ -121,31 +84,41 @@
           <button id="got-it-btn" class="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg hover:bg-blue-700 transition text-lg font-semibold">Got it!</button>
         </div>
       </div>
+    </div>
+  </div>
 
-      <!-- Step 4: Chatbot Interview UI -->
-      <div id="chat-section" class="hidden flex flex-col gap-4">
-        <div id="chat-window" class="flex flex-col gap-2 mb-4 max-h-80 overflow-y-auto bg-gray-50 rounded-lg p-4 shadow-inner">
-          <!-- Chat bubbles will appear here -->
-          <div class="chat-bubble-ai flex items-center gap-2">
-            <span>Welcome! Let's begin your interview. Ready?</span>
-            <button class="voice-btn" title="Play Voice"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 19V6l12-2v16l-12-2z"/></svg></button>
-          </div>
+  <!-- Fullscreen Interview UI (hidden until "Got it!") -->
+  <div id="interview-ui" class="hidden fixed inset-0 flex h-screen w-screen z-20 bg-white">
+    <!-- Left: Interviewer Avatar -->
+    <div class="hidden md:flex flex-col items-center justify-center w-1/2 bg-gradient-to-br from-blue-200 to-cyan-100">
+      <img src="https://api.dicebear.com/7.x/bottts/svg?seed=AI-Interviewer" alt="AI Interviewer" class="w-64 h-64 rounded-full avatar-shadow mb-8">
+      <h2 class="text-3xl font-bold gradient-text mb-2">AI Interviewer</h2>
+      <p class="text-lg text-gray-600 text-center max-w-xs">Your professional interviewer. Answer honestly and confidently!</p>
+    </div>
+    <!-- Right: Q&A Section -->
+    <div class="flex-1 flex flex-col justify-between h-full bg-white">
+      <!-- Question Display -->
+      <div class="flex flex-col items-center justify-center h-2/5 px-6 pt-12">
+        <div id="question-box" class="bg-blue-50 rounded-2xl shadow-lg p-8 w-full max-w-2xl text-2xl text-gray-800 font-semibold text-center min-h-[120px] flex items-center justify-center">
+          <span id="current-question">Welcome! We are starting Interview soon...</span>
         </div>
-        <form id="chat-form" class="flex gap-2 items-center">
-          <input type="text" id="chat-input" class="flex-1 border rounded p-3" placeholder="Type your answer..." autocomplete="off" />
-          <button type="button" id="voice-answer-btn" class="voice-btn" title="Record Voice Answer">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="11" r="4"/><path d="M12 15v4m-4 0h8"/></svg>
+      </div>
+      <!-- Answer Input -->
+      <div class="flex flex-col items-center justify-center h-2/5 px-6">
+        <textarea id="answer-input" rows="5" class="w-full max-w-2xl p-5 text-lg border-2 border-blue-200 rounded-2xl shadow focus:outline-none focus:border-blue-500 resize-none mb-4" placeholder="Type your answer here or use the mic..."></textarea>
+        <div class="flex items-center gap-6">
+          <button id="mic-btn" class="mic-btn border-2 border-blue-500 text-blue-500 rounded-full w-16 h-16 flex items-center justify-center text-3xl bg-white hover:bg-blue-500 hover:text-white transition" title="Record your answer">
+            <svg id="mic-icon" xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18v2m0 0h-3m3 0h3m-3-2a6 6 0 006-6V9a6 6 0 10-12 0v3a6 6 0 006 6z" />
+            </svg>
           </button>
-          <button type="submit" class="bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg hover:bg-green-700 transition font-semibold">Send</button>
-        </form>
-        <div class="flex gap-4 my-4">
-          <button id="start-record-btn" class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-700 font-semibold">Start Recording</button>
-          <button id="send-record-btn" class="bg-green-600 text-white px-6 py-2 rounded-lg shadow hover:bg-green-700 font-semibold" disabled>Send</button>
-          <span id="recording-indicator" class="text-red-600 font-bold ml-2 hidden">● Recording...</span>
+          <button id="send-btn" class="bg-green-600 text-white px-10 py-4 rounded-2xl text-xl font-bold shadow-lg hover:bg-green-700 transition" title="Send your answer">Send</button>
         </div>
+        <span id="recording-indicator" class="text-red-600 font-bold mt-3 hidden">● Recording...</span>
       </div>
     </div>
   </div>
+
   <script src="https://cdn.jsdelivr.net/npm/recorderjs@0.1.0/dist/recorder.js"></script>
   <script>
     // TTS function
@@ -162,20 +135,12 @@
       }
     }
 
-    function ensureVoicesLoaded(callback) {
-      let voices = window.speechSynthesis.getVoices();
-      if (voices.length) {
-        callback();
-      } else {
-        window.speechSynthesis.onvoiceschanged = callback;
-      }
-    }
-
-    // Step navigation logic (dummy for now)
+    // Step navigation logic
     const loginSection = document.getElementById('login-section');
     const interviewListSection = document.getElementById('interview-list-section');
     const instructionsSection = document.getElementById('instructions-section');
-    const chatSection = document.getElementById('chat-section');
+    const centerUI = document.getElementById('center-ui');
+    const interviewUI = document.getElementById('interview-ui');
 
     // Step 1: Login
     document.getElementById('loginForm').onsubmit = async function(e) {
@@ -221,10 +186,10 @@
       }
     };
 
-    // Step 3: Show Chatbot when "Got it!" is clicked
+    // Step 3: Show Interview UI when "Got it!" is clicked
     document.getElementById('got-it-btn').onclick = async function() {
-      instructionsSection.classList.add('hidden');
-      chatSection.classList.remove('hidden');
+      centerUI.classList.add('hidden');
+      interviewUI.classList.remove('hidden');
       // Start interview
       const interview_id = sessionStorage.getItem('interview_id');
       const res = await fetch('/api/interview/start', {
@@ -234,111 +199,58 @@
       });
       const data = await res.json();
       window.interviewMessages = data.messages;
-      showAIMessage(data.question);
+      showQuestion(data.question);
     };
 
-    function showAIMessage(text) {
-      const aiBubble = document.createElement('div');
-      aiBubble.className = 'chat-bubble-ai flex items-center gap-2';
-      aiBubble.innerHTML = `<span>${text}</span>
-        <button class="voice-btn" title="Play Voice"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 19V6l12-2v16l-12-2z"/></svg></button>`;
-      chatWindow.appendChild(aiBubble);
-      chatWindow.scrollTop = chatWindow.scrollHeight;
+    // --- Interview UI logic ---
+    const questionBox = document.getElementById('current-question');
+    const answerInput = document.getElementById('answer-input');
+    const micBtn = document.getElementById('mic-btn');
+    const micIcon = document.getElementById('mic-icon');
+    const sendBtn = document.getElementById('send-btn');
+    const recordingIndicator = document.getElementById('recording-indicator');
+    let isRecording = false, recorder, audioContext, stream;
+
+    function showQuestion(text) {
+      questionBox.textContent = text;
       speak(text);
-      aiBubble.querySelector('.voice-btn').onclick = function() {
-        speak(text);
-      };
     }
 
-    // Step 4: Chatbot UI (real logic)
-    document.getElementById('chat-form').onsubmit = async function(e) {
-      e.preventDefault();
-      const input = document.getElementById('chat-input');
-      if (!input.value.trim()) return;
-      // User bubble
-      const userBubble = document.createElement('div');
-      userBubble.className = 'chat-bubble-user';
-      userBubble.textContent = input.value;
-      chatWindow.appendChild(userBubble);
-      chatWindow.scrollTop = chatWindow.scrollHeight;
-      input.value = '';
-
-      // Send answer to backend
+    sendBtn.onclick = async function() {
+      const answer = answerInput.value.trim();
+      if (!answer) return;
+      answerInput.value = '';
       const res = await fetch('/api/interview/answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          answer: input.value,
+          answer: answer,
           messages: window.interviewMessages
         })
       });
       const data = await res.json();
       window.interviewMessages = data.messages;
-      showAIMessage(data.question);
+      showQuestion(data.question);
     };
 
-    // Voice answer button (dummy)
-    document.getElementById('voice-answer-btn').onclick = function() {
-      const userBubble = document.createElement('div');
-      userBubble.className = 'chat-bubble-user';
-      userBubble.textContent = '[Voice answer recorded]';
-      chatWindow.appendChild(userBubble);
-      chatWindow.scrollTop = chatWindow.scrollHeight;
-      // Dummy AI response
-      setTimeout(() => {
-        const aiText = "AI: (dummy) Next question or feedback here.";
-        const aiBubble = document.createElement('div');
-        aiBubble.className = 'chat-bubble-ai flex items-center gap-2';
-        aiBubble.innerHTML = `<span>${aiText}</span>
-          <button class="voice-btn" title="Play Voice"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 19V6l12-2v16l-12-2z"/></svg></button>`;
-        chatWindow.appendChild(aiBubble);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-        speak(aiText);
-
-        // Add event listener for the new voice button
-        aiBubble.querySelector('.voice-btn').onclick = function() {
-          speak(aiText);
-        };
-      }, 800);
-    };
-
-    // Add TTS to the initial AI message
-    window.addEventListener('DOMContentLoaded', () => {
-      const firstAIMsg = chatWindow.querySelector('.chat-bubble-ai span');
-      if (firstAIMsg) speak(firstAIMsg.textContent);
-      // Add event listener for the initial voice button
-      const firstVoiceBtn = chatWindow.querySelector('.voice-btn');
-      if (firstVoiceBtn && firstAIMsg) {
-        firstVoiceBtn.onclick = function() {
-          speak(firstAIMsg.textContent);
-        };
-      }
-    });
-
-    let recorder, audioContext, stream;
-    const startBtn = document.getElementById('start-record-btn');
-    const sendBtn = document.getElementById('send-record-btn');
-    const chatInput = document.getElementById('chat-input');
-    const recordingIndicator = document.getElementById('recording-indicator');
-
-    startBtn.onclick = async function() {
-      if (!recorder) {
+    micBtn.onclick = async function() {
+      if (!isRecording) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const input = audioContext.createMediaStreamSource(stream);
         recorder = new Recorder(input, { numChannels: 1 });
         recorder.record();
-        startBtn.disabled = true;
-        sendBtn.disabled = false;
+        isRecording = true;
+        micBtn.classList.add('recording');
+        micBtn.title = "Stop Recording";
+        micIcon.innerHTML = `<rect x="6" y="6" width="12" height="12" rx="3" fill="currentColor"/>`; // Square icon
         recordingIndicator.classList.remove('hidden');
-      }
-    };
-
-    sendBtn.onclick = function() {
-      if (recorder) {
+      } else {
         recorder.stop();
-        startBtn.disabled = false;
-        sendBtn.disabled = true;
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        micBtn.title = "Record your answer";
+        micIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18v2m0 0h-3m3 0h3m-3-2a6 6 0 006-6V9a6 6 0 10-12 0v3a6 6 0 006 6z" />`; // Mic icon
         recordingIndicator.classList.add('hidden');
         recorder.exportWAV(async function(blob) {
           const formData = new FormData();
@@ -346,7 +258,7 @@
           // Send to backend for STT
           const res = await fetch('/api/stt', { method: 'POST', body: formData });
           const data = await res.json();
-          chatInput.value = data.transcript || '';
+          answerInput.value = data.transcript || '';
           // Clean up
           recorder.clear();
           recorder = null;
