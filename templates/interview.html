@@ -178,32 +178,80 @@
     const chatSection = document.getElementById('chat-section');
 
     // Step 1: Login
-    document.getElementById('loginForm').onsubmit = function(e) {
+    document.getElementById('loginForm').onsubmit = async function(e) {
       e.preventDefault();
-      loginSection.classList.add('hidden');
-      interviewListSection.classList.remove('hidden');
+      const c_id = this.c_id.value;
+      const password = this.password.value;
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ c_id, password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        loginSection.classList.add('hidden');
+        // Fetch interviews
+        const interviewsRes = await fetch('/api/my_interviews');
+        const interviews = await interviewsRes.json();
+        const listDiv = document.getElementById('interview-list');
+        listDiv.innerHTML = '';
+        interviews.forEach(iv => {
+          const div = document.createElement('div');
+          div.className = 'flex items-center justify-between bg-blue-50 rounded-lg p-4 shadow';
+          div.innerHTML = `<div>
+            <div class="font-semibold">Job ID: ${iv.job_id}</div>
+            <div class="text-gray-600 text-sm">Date: ${iv.date} | Time: ${iv.time}</div>
+          </div>
+          <button class="start-interview-btn bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold" data-interview="${iv.interview_id}">Start</button>`;
+          listDiv.appendChild(div);
+        });
+        interviewListSection.classList.remove('hidden');
+      } else {
+        document.getElementById('login-message').textContent = data.error || "Login failed";
+        document.getElementById('login-message').classList.remove('hidden');
+      }
     };
 
     // Step 2: Show Instructions when "Start" is clicked
-    document.querySelectorAll('.start-interview-btn').forEach(btn => {
-      btn.onclick = function() {
+    document.getElementById('interview-list').onclick = function(e) {
+      if (e.target.classList.contains('start-interview-btn')) {
+        sessionStorage.setItem('interview_id', e.target.dataset.interview);
         interviewListSection.classList.add('hidden');
         instructionsSection.classList.remove('hidden');
-      };
-    });
-
-    // Step 3: Show Chatbot when "Got it!" is clicked
-    document.getElementById('got-it-btn').onclick = function() {
-      instructionsSection.classList.add('hidden');
-      chatSection.classList.remove('hidden');
-      // Speak the first AI message
-      const firstAIMsg = chatWindow.querySelector('.chat-bubble-ai span');
-      if (firstAIMsg) speak(firstAIMsg.textContent);
+      }
     };
 
-    // Step 4: Chatbot UI (dummy, just appends user/AI bubbles)
-    const chatWindow = document.getElementById('chat-window');
-    document.getElementById('chat-form').onsubmit = function(e) {
+    // Step 3: Show Chatbot when "Got it!" is clicked
+    document.getElementById('got-it-btn').onclick = async function() {
+      instructionsSection.classList.add('hidden');
+      chatSection.classList.remove('hidden');
+      // Start interview
+      const interview_id = sessionStorage.getItem('interview_id');
+      const res = await fetch('/api/interview/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interview_id })
+      });
+      const data = await res.json();
+      window.interviewMessages = data.messages;
+      showAIMessage(data.question);
+    };
+
+    function showAIMessage(text) {
+      const aiBubble = document.createElement('div');
+      aiBubble.className = 'chat-bubble-ai flex items-center gap-2';
+      aiBubble.innerHTML = `<span>${text}</span>
+        <button class="voice-btn" title="Play Voice"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 19V6l12-2v16l-12-2z"/></svg></button>`;
+      chatWindow.appendChild(aiBubble);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+      speak(text);
+      aiBubble.querySelector('.voice-btn').onclick = function() {
+        speak(text);
+      };
+    }
+
+    // Step 4: Chatbot UI (real logic)
+    document.getElementById('chat-form').onsubmit = async function(e) {
       e.preventDefault();
       const input = document.getElementById('chat-input');
       if (!input.value.trim()) return;
@@ -214,22 +262,19 @@
       chatWindow.appendChild(userBubble);
       chatWindow.scrollTop = chatWindow.scrollHeight;
       input.value = '';
-      // Dummy AI response
-      setTimeout(() => {
-        const aiText = "AI: (dummy) Next question or feedback here.";
-        const aiBubble = document.createElement('div');
-        aiBubble.className = 'chat-bubble-ai flex items-center gap-2';
-        aiBubble.innerHTML = `<span>${aiText}</span>
-          <button class="voice-btn" title="Play Voice"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 19V6l12-2v16l-12-2z"/></svg></button>`;
-        chatWindow.appendChild(aiBubble);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-        speak(aiText);
 
-        // Add event listener for the new voice button
-        aiBubble.querySelector('.voice-btn').onclick = function() {
-          speak(aiText);
-        };
-      }, 800);
+      // Send answer to backend
+      const res = await fetch('/api/interview/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answer: input.value,
+          messages: window.interviewMessages
+        })
+      });
+      const data = await res.json();
+      window.interviewMessages = data.messages;
+      showAIMessage(data.question);
     };
 
     // Voice answer button (dummy)

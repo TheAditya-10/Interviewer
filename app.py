@@ -1,6 +1,7 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from flask import session
 
 import pymysql
 from werkzeug.utils import secure_filename
@@ -14,10 +15,12 @@ import config
 from dbmodel import db, Job, Candidate, Interview
 from resumereader import extract_candidate_data
 from scheduler import get_skill_order
+from interviewer import get_first_question, get_next_question, record_answer
 
 pymysql.install_as_MySQLdb()
 
 app = Flask(__name__)
+app.secret_key = config.SECRET_KEY
 CORS(app)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = config.SQLALCHEMY_DATABASE_URI
@@ -188,6 +191,77 @@ def stt():
     with open(dummy_path, "a", encoding="utf-8") as f:
         f.write(transcript + "\n")
     return jsonify({"transcript": transcript})
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    c_id = data.get('c_id')
+    password = data.get('password')
+    candidate = Candidate.query.get(int(c_id))
+    print(f"Candidate ID: {c_id}, Password: {password}")
+    if not candidate or candidate.password != password:
+        return jsonify({"error": "Invalid credentials"}), 401
+    session['c_id'] = candidate.C_id
+    return jsonify({"message": "Login successful"})
+
+@app.route('/api/my_interviews', methods=['GET'])
+def my_interviews():
+    c_id = session.get('c_id')
+    if not c_id:
+        return jsonify({"error": "Not authenticated"}), 401
+    interviews = Interview.query.filter_by(C_id=c_id).all()
+    result = []
+    for interview in interviews:
+        job = Job.query.get(interview.J_id)
+        result.append({
+            "interview_id": f"{interview.J_id}_{interview.C_id}",
+            "job_id": job.J_id,
+            "date": interview.start_datetime.strftime("%Y-%m-%d"),
+            "time": interview.start_datetime.strftime("%H:%M"),
+            "job_title": job.min_qualification  # or another field
+        })
+    return jsonify(result)
+
+@app.route('/api/interview/start', methods=['POST'])
+def start_interview():
+    data = request.json
+    interview_id = data.get('interview_id')
+    c_id = session.get('c_id')
+    if not c_id:
+        return jsonify({"error": "Not authenticated"}), 401
+    job_id, _ = map(int, interview_id.split('_'))
+    candidate = Candidate.query.get(c_id)
+    job = Job.query.get(job_id)
+    interview = Interview.query.filter_by(J_id=job_id, C_id=c_id).first()
+    # Prepare info strings
+    candidate_info = f"Name: {candidate.name}\nDOB: {candidate.dob}\nSkills: {candidate.skills}\nSoft Skills: {candidate.soft_skills}\nAchievements: {candidate.achievements}\nExperience: {candidate.experience}\nMax Qualification: {candidate.max_qualification}"
+    job_info = f"Required Experience: {job.required_experience}\nSkill Requirements: {job.skill_req}\nMin Qualification: {job.min_qualification}\nSoft Skill Requirements: {job.soft_skill_req}"
+    interview_info = f"Skill Order: {interview.skill_order}"
+    first_question, messages = get_first_question(candidate_info, job_info, interview_info)
+    session['messages'] = [msg.dict() for msg in messages]
+    session['job_info'] = job_info
+    session['interview_info'] = interview_info
+    return jsonify({"question": first_question, "messages": session['messages']})
+
+@app.route('/api/interview/answer', methods=['POST'])
+def interview_answer():
+    data = request.json
+    answer = data.get('answer')
+    messages = data.get('messages')
+    job_info = session.get('job_info')
+    interview_info = session.get('interview_info')
+    # Rebuild message objects
+    from langchain.schema import AIMessage, HumanMessage
+    msg_objs = []
+    for msg in messages:
+        if msg['type'] == 'ai':
+            msg_objs.append(AIMessage(content=msg['content']))
+        else:
+            msg_objs.append(HumanMessage(content=msg['content']))
+    msg_objs = record_answer(msg_objs, answer)
+    next_question, msg_objs = get_next_question(msg_objs, job_info, interview_info)
+    session['messages'] = [m.dict() for m in msg_objs]
+    return jsonify({"question": next_question, "messages": session['messages']})
 
 with app.app_context():
     db.create_all()
