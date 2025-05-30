@@ -1,13 +1,19 @@
 from flask import Flask, request, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from dbmodel import db, Job, Candidate, Interview
+
 import pymysql
-import config  
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import os
-from resumereader import extract_candidate_data, get_skill_order
+import wave
+import vosk
+import json
+
+import config  
+from dbmodel import db, Job, Candidate, Interview
+from resumereader import extract_candidate_data
+from scheduler import get_skill_order
 
 pymysql.install_as_MySQLdb()
 
@@ -81,9 +87,10 @@ def apply_job():
 
     # Fetch candidate and job skills
     candidate_skills = candidate.skills if candidate.skills else []
+    print("Candidate skills:", candidate_skills)
     job_obj = db.session.get(Job, int(job_id))  # updated for SQLAlchemy 2.x
     job_skills = job_obj.skill_req if job_obj and job_obj.skill_req else []
-
+    print("Job skills:", job_skills)
     # Get skill order using LLM
     skill_order = get_skill_order(candidate_skills, job_skills)
 
@@ -114,6 +121,34 @@ def apply_job():
         "job_id": job_id
     })
 
+@app.route('/api/job', methods=['POST'])
+def post_job():
+    data = request.form if request.form else request.json
+    required_experience = data.get('required_experience')
+    skill_req = data.get('skill_req')
+    min_qualification = data.get('min_qualification')
+    soft_skill_req = data.get('soft_skill_req')
+
+    if not (required_experience and skill_req and min_qualification and soft_skill_req):
+        return jsonify({"message": "All fields are required."}), 400
+
+    import json
+    try:
+        skill_req_json = json.loads(skill_req)
+        soft_skill_req_json = json.loads(soft_skill_req)
+    except Exception:
+        return jsonify({"message": "Skill fields must be valid JSON arrays."}), 400
+
+    job = Job(
+        required_experience=required_experience,
+        skill_req=skill_req_json,
+        min_qualification=min_qualification,
+        soft_skill_req=soft_skill_req_json
+    )
+    db.session.add(job)
+    db.session.commit()
+    return jsonify({"message": "Job posted successfully!", "J_id": job.J_id})
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -129,6 +164,30 @@ def interview():
 @app.route('/job')
 def job():
     return render_template('job.html')
+
+
+vosk_model = vosk.Model("vosk-model-small-en-us-0.15")  # Path to your Vosk model
+
+@app.route('/api/stt', methods=['POST'])
+def stt():
+    audio = request.files['audio']
+    # Save audio to a dummy file for now
+    dummy_path = os.path.join("static", "dummy_transcript.txt")
+    wf = wave.open(audio, "rb")
+    rec = vosk.KaldiRecognizer(vosk_model, wf.getframerate())
+    results = []
+    while True:
+        data = wf.readframes(4000)
+        if len(data) == 0:
+            break
+        if rec.AcceptWaveform(data):
+            results.append(json.loads(rec.Result()))
+    results.append(json.loads(rec.FinalResult()))
+    transcript = " ".join([r.get("text", "") for r in results])
+    # Save transcript to dummy file
+    with open(dummy_path, "a", encoding="utf-8") as f:
+        f.write(transcript + "\n")
+    return jsonify({"transcript": transcript})
 
 with app.app_context():
     db.create_all()

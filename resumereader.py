@@ -1,18 +1,14 @@
-from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.prompts import PromptTemplate
-from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+from langchain_core.output_parsers import JsonOutputParser
 from langchain_ollama import OllamaLLM
 
-# Load environment variables
-load_dotenv()
-
-model = OllamaLLM(model="phi3:mini", temperature=0)
+model = OllamaLLM(model="phi3:mini", temperature=0.25)
+jsonparser = JsonOutputParser()
 
 def extract_candidate_data(pdf_path):
     loader = PyPDFLoader(pdf_path)
     resume = loader.load()
-    jsonparser = JsonOutputParser()
     resume_prompt = PromptTemplate(
         input_variables=["resume_text"],
         template=(
@@ -27,7 +23,7 @@ def extract_candidate_data(pdf_path):
                 "- achievements: a list of strings\n"
                 "- experience: one of 'Fresher'(Default), 'Intermediate', or 'Expert' (as a string)\n"
                 "Return ONLY a valid JSON object, with all property names and string values in double quotes, and NO trailing commas. "
-                "Do not include any markdown, code block, or extra text.\n"
+                "Do not include any reasoning, markdown, code block, or extra text.\n"
                 "Example:\n"
                 "[\n"
                 '  "name": "Shivya Singh"\n'
@@ -44,28 +40,6 @@ def extract_candidate_data(pdf_path):
     candidate_data = chain.invoke({"resume_text": resume[0].page_content})
     return candidate_data
 
-def get_skill_order(candidate_skills, job_skills):
 
-    prompt = PromptTemplate(
-        input_variables=["candidate_skills", "job_skills"],
-        template=(
-            "Given the following candidate skills: {candidate_skills}\n"
-            "And the following job required skills: {job_skills}\n"
-            "Return an ordered JSON list (array) of the skills that match between candidate and job, "
-            "ordered by best fit or relevance for the job. Only include skills present in both lists. "
-            "Return only a JSON array, nothing else."
-        ),
-    )
-    chain = prompt | model | StrOutputParser()
-    result = chain.invoke({
-        "candidate_skills": candidate_skills,
-        "job_skills": job_skills
-    })
-    import json
-    try:
-        ordered_skills = json.loads(result)
-    except Exception:
-        ordered_skills = ['Nothing found']
-    return ordered_skills
 
 
