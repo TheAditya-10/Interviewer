@@ -177,7 +177,7 @@
       <p class="text-blue-700 font-semibold">We will reach out to you soon.</p>
     </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/recorderjs@0.1.0/dist/recorder.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/mattdiamond/Recorderjs@master/dist/recorder.js"></script>
   <script>
     // TTS function
     function speak(text, onEndCallback) {
@@ -333,7 +333,6 @@
       questionBox.textContent = '';
       cursor.style.display = 'inline-block';
 
-      // Prepare TTS
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utter = new window.SpeechSynthesisUtterance(text);
@@ -342,22 +341,19 @@
         const markVoice = voices.find(v => v.name === "Microsoft Mark - English (United States)");
         if (markVoice) utter.voice = markVoice;
 
-        // Show speaking animation
         document.getElementById('avatar-speaking-rings').style.opacity = 1;
 
-        // Animate text in sync with TTS
         let i = 0;
         utter.onboundary = function(event) {
-          // event.charIndex gives the index of the character being spoken
           i = event.charIndex;
           questionBox.textContent = text.slice(0, i + 1);
         };
 
         utter.onend = function() {
-          // Ensure full text is shown at the end
           questionBox.textContent = text;
           cursor.style.display = 'none';
           document.getElementById('avatar-speaking-rings').style.opacity = 0;
+          startMicRecording(); // <-- Start mic automatically after TTS
         };
 
         window.speechSynthesis.speak(utter);
@@ -371,13 +367,24 @@
             setTimeout(typeWriter, 18);
           } else {
             cursor.style.display = 'none';
+            startMicRecording(); // <-- Start mic after typewriter
           }
         }
         typeWriter();
       }
     }
 
-    sendBtn.onclick = async function() {
+    sendBtn.onclick = function() {
+      if (isRecording) {
+        stopMicRecording(() => {
+          sendAnswer();
+        });
+      } else {
+        sendAnswer();
+      }
+    };
+
+    async function sendAnswer() {
       const answer = answerInput.value.trim();
       if (!answer) return;
       answerInput.value = '';
@@ -392,7 +399,7 @@
       const data = await res.json();
       window.interviewMessages = data.messages;
       showQuestion(data.question);
-    };
+    }
 
     micBtn.onclick = async function() {
       if (!isRecording) {
@@ -434,6 +441,48 @@
         });
       }
     };
+
+    async function startMicRecording() {
+      if (isRecording) return;
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const input = audioContext.createMediaStreamSource(stream);
+      recorder = new Recorder(input, { numChannels: 1 });
+      recorder.record();
+      isRecording = true;
+      micBtn.classList.add('recording');
+      micBtn.title = "Stop Recording";
+      micIcon.innerHTML = `<rect x="6" y="6" width="12" height="12" rx="3" fill="currentColor"/>`;
+      recordingIndicator.classList.remove('hidden');
+    }
+
+    function stopMicRecording(callback) {
+      if (!isRecording) return;
+      recorder.stop();
+      isRecording = false;
+      micBtn.classList.remove('recording');
+      micBtn.title = "Record your answer";
+      micIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18v2m0 0h-3m3 0h3m-3-2a6 6 0 006-6V9a6 6 0 10-12 0v3a6 6 0 006 6z" />`;
+      recordingIndicator.classList.add('hidden');
+      recorder.exportWAV(async function(blob) {
+        const formData = new FormData();
+        formData.append('audio', blob, 'recording.wav');
+        const res = await fetch('/api/stt', { method: 'POST', body: formData });
+        const data = await res.json();
+        answerInput.value = data.transcript || '';
+        recorder.clear();
+        recorder = null;
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+          stream = null;
+        }
+        if (audioContext) {
+          audioContext.close();
+          audioContext = null;
+        }
+        if (callback) callback();
+      });
+    }
 
     // --- Timer and End Interview logic ---
     const liveTimerSpan = document.getElementById('live-timer');

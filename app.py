@@ -187,28 +187,27 @@ def reports():
     return render_template('reports.html')
 
 
-# vosk_model = vosk.Model("vosk-model-small-en-us-0.15")  # Path to your Vosk model
+vosk_model = vosk.Model("vosk-model-small-en-us-0.15")  # Adjust path as needed
 
-# @app.route('/api/stt', methods=['POST'])
-# def stt():
-#     audio = request.files['audio']
-#     # Save audio to a dummy file for now
-#     dummy_path = os.path.join("static", "dummy_transcript.txt")
-#     wf = wave.open(audio, "rb")
-#     rec = vosk.KaldiRecognizer(vosk_model, wf.getframerate())
-#     results = []
-#     while True:
-#         data = wf.readframes(4000)
-#         if len(data) == 0:
-#             break
-#         if rec.AcceptWaveform(data):
-#             results.append(json.loads(rec.Result()))
-#     results.append(json.loads(rec.FinalResult()))
-#     transcript = " ".join([r.get("text", "") for r in results])
-#     # Save transcript to dummy file
-#     with open(dummy_path, "a", encoding="utf-8") as f:
-#         f.write(transcript + "\n")
-#     return jsonify({"transcript": transcript})
+@app.route('/api/stt', methods=['POST'])
+def stt():
+    audio = request.files['audio']
+    temp_path = os.path.join("static", "temp_audio.wav")
+    audio.save(temp_path)
+    wf = wave.open(temp_path, "rb")
+    rec = vosk.KaldiRecognizer(vosk_model, wf.getframerate())
+    results = []
+    while True:
+        data = wf.readframes(4000)
+        if len(data) == 0:
+            break
+        if rec.AcceptWaveform(data):
+            results.append(json.loads(rec.Result()))
+    results.append(json.loads(rec.FinalResult()))
+    transcript = " ".join([r.get("text", "") for r in results])
+    wf.close()
+    os.remove(temp_path)
+    return jsonify({"transcript": transcript})
 
 @app.route('/api/login', methods=['POST'])
 def login():
