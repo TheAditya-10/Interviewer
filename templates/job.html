@@ -40,6 +40,10 @@
       <h2 class="text-3xl md:text-4xl font-extrabold mb-6 gradient-text text-center">Post a Job</h2>
       <form id="jobForm" class="space-y-6">
         <div>
+          <label class="block mb-2 text-sm font-medium text-gray-700">Job Title</label>
+          <input type="text" name="job_title" class="w-full border rounded p-3 focus:outline-none focus:ring-2 focus:ring-blue-400" required>
+        </div>
+        <div>
           <label class="block mb-2 text-sm font-medium text-gray-700">Required Experience</label>
           <input type="text" name="required_experience" class="w-full border rounded p-3 focus:outline-none focus:ring-2 focus:ring-blue-400" required>
         </div>
@@ -55,6 +59,15 @@
           <label class="block mb-2 text-sm font-medium text-gray-700">Soft Skill Requirements <span class="text-xs text-gray-400">(comma separated)</span></label>
           <input type="text" name="soft_skill_req" class="w-full border rounded p-3 focus:outline-none focus:ring-2 focus:ring-blue-400" required>
         </div>
+        <!-- Add these fields just before the submit button in your form -->
+        <div>
+          <label class="block mb-2 text-sm font-medium text-gray-700">Password</label>
+          <input type="password" name="password" id="password" class="w-full border rounded p-3 focus:outline-none focus:ring-2 focus:ring-blue-400" required>
+        </div>
+        <div>
+          <label class="block mb-2 text-sm font-medium text-gray-700">Confirm Password</label>
+          <input type="password" name="confirm_password" id="confirm_password" class="w-full border rounded p-3 focus:outline-none focus:ring-2 focus:ring-blue-400" required>
+        </div>
         <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg shadow-lg hover:bg-blue-700 transition text-lg font-semibold">Post Job</button>
       </form>
       <p id="message" class="mt-4 text-center text-green-600 hidden"></p>
@@ -62,13 +75,23 @@
   </div>
   <script>
     document.getElementById('jobForm').addEventListener('submit', function(e) {
+      const pw = document.getElementById('password').value;
+      const cpw = document.getElementById('confirm_password').value;
+      if (pw !== cpw) {
+        e.preventDefault();
+        alert('Passwords do not match!');
+        return false;
+      }
       e.preventDefault();
       const formData = new FormData(this);
       const data = {
+        job_title: formData.get('job_title'),
         required_experience: formData.get('required_experience'),
         skill_req: JSON.stringify(formData.get('skill_req').split(',').map(s => s.trim()).filter(Boolean)),
         min_qualification: formData.get('min_qualification'),
-        soft_skill_req: JSON.stringify(formData.get('soft_skill_req').split(',').map(s => s.trim()).filter(Boolean))
+        soft_skill_req: JSON.stringify(formData.get('soft_skill_req').split(',').map(s => s.trim()).filter(Boolean)),
+        password: formData.get('password'),
+        confirm_password: formData.get('confirm_password')
       };
       axios.post('/api/job', data)
         .then(response => {

@@ -74,12 +74,38 @@
           <label for="create_password" class="block mb-2 text-sm font-medium text-gray-700">Create Password</label>
           <input type="password" id="create_password" name="create_password" class="w-full border rounded p-3">
         </div>
+        <div id="confirm_password_field" style="display:none;">
+          <label for="confirm_password" class="block mb-2 text-sm font-medium text-gray-700">Confirm Password</label>
+          <input type="password" id="confirm_password" name="confirm_password" class="w-full border rounded p-3">
+        </div>
         <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg shadow-lg hover:bg-blue-700 transition text-lg font-semibold">Submit</button>
       </form>
       <p id="message" class="mt-4 text-center text-green-600 hidden">Application submitted successfully!</p>
     </div>
   </div>
+
+  <!-- Sexy buffering animation overlay -->
+  <div id="buffering-overlay" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+    <div class="flex flex-col items-center">
+      <div class="relative w-24 h-24">
+        <div class="absolute inset-0 animate-spin rounded-full border-8 border-blue-400 border-t-transparent"></div>
+        <svg class="absolute inset-0 w-24 h-24" viewBox="0 0 100 100">
+          <text x="50%" y="54%" text-anchor="middle" fill="#6366f1" font-size="22" font-family="Montserrat" dy=".3em">AI</text>
+        </svg>
+      </div>
+      <div class="mt-6 text-xl font-bold gradient-text">Analyzing Your Resume...</div>
+      <div class="mt-2 text-blue-700">Our AI is preparing your interview journey!</div>
+    </div>
+  </div>
+
   <script>
+    function showBuffering() {
+      document.getElementById('buffering-overlay').classList.remove('hidden');
+    }
+    function hideBuffering() {
+      document.getElementById('buffering-overlay').classList.add('hidden');
+    }
+
     // Fetch jobs dynamically
     axios.get('/api/jobs')
       .then(response => {
@@ -100,33 +126,48 @@
         document.getElementById('password_field').style.display = '';
         document.getElementById('resume_field').style.display = 'none';
         document.getElementById('create_password_field').style.display = 'none';
+        document.getElementById('confirm_password_field').style.display = 'none';
         document.getElementById('resume').required = false;
         document.getElementById('c_id').required = true;
         document.getElementById('password').required = true;
         document.getElementById('create_password').required = false;
+        document.getElementById('confirm_password').required = false;
       } else {
         document.getElementById('cid_field').style.display = 'none';
         document.getElementById('password_field').style.display = 'none';
         document.getElementById('resume_field').style.display = '';
         document.getElementById('create_password_field').style.display = '';
+        document.getElementById('confirm_password_field').style.display = '';
         document.getElementById('resume').required = true;
         document.getElementById('c_id').required = false;
         document.getElementById('password').required = false;
         document.getElementById('create_password').required = true;
+        document.getElementById('confirm_password').required = true;
       }
     });
 
     // Submit form
     document.getElementById('applicationForm').addEventListener('submit', function(e) {
       e.preventDefault();
-      const form = new FormData(this);
-
-      axios.post('/api/apply', form, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
+      const appliedBefore = document.getElementById('applied_before').value;
+      if (appliedBefore === 'no') {
+        const pw = document.getElementById('create_password').value;
+        const cpw = document.getElementById('confirm_password').value;
+        if (pw !== cpw) {
+          alert('Passwords do not match!');
+          return false;
         }
+      }
+
+      // Show sexy buffering animation
+      showBuffering();
+
+      const form = new FormData(this);
+      axios.post('/api/apply', form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       })
       .then(response => {
+        hideBuffering();
         const msg = document.getElementById('message');
         msg.innerHTML = `
           <span class="block text-xl font-bold mb-2">Application submitted successfully!</span>
@@ -137,7 +178,10 @@
         msg.classList.remove('hidden');
         this.reset();
       })
-      .catch(err => alert('Error: ' + err.response.data.message));
+      .catch(err => {
+        hideBuffering();
+        alert('Error: ' + err.response.data.message);
+      });
     });
 
     // Set initial state on page load

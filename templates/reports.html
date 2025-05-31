@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Job Reports</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Montserrat', sans-serif; background: linear-gradient(135deg, #e0e7ff 0%, #f0fdfa 100%); }
+    .glass { background: rgba(255,255,255,0.85); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); backdrop-filter: blur(8px); border-radius: 1.5rem; border: 1px solid rgba(255,255,255,0.18);}
+    .gradient-text { background: linear-gradient(90deg, #6366f1, #06b6d4, #22d3ee); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;}
+    .sortable:hover { text-decoration: underline; cursor: pointer; }
+  </style>
+</head>
+<body class="min-h-screen relative">
+  <div class="flex items-center justify-center min-h-screen w-full px-2">
+    <div class="glass p-4 md:p-8 w-full max-w-5xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-extrabold mb-6 gradient-text text-center">Job Reports</h2>
+      <form id="companyLoginForm" class="space-y-4 mb-6">
+        <div>
+          <label class="block mb-2 text-sm font-medium text-gray-700">Job ID</label>
+          <input type="number" name="job_id" class="w-full border rounded p-3" required>
+        </div>
+        <div>
+          <label class="block mb-2 text-sm font-medium text-gray-700">Password</label>
+          <input type="password" name="password" class="w-full border rounded p-3" required>
+        </div>
+        <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg shadow-lg hover:bg-blue-700 transition text-lg font-semibold">View Reports</button>
+      </form>
+      <div id="reports-section" class="hidden">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-2xl font-bold gradient-text">Candidates</h3>
+          <div>
+            <button class="sortable px-3 py-1 rounded bg-blue-100 text-blue-700 mr-2" onclick="sortTable('score')">Sort by Score</button>
+            <button class="sortable px-3 py-1 rounded bg-blue-100 text-blue-700 mr-2" onclick="sortTable('date')">Sort by Date</button>
+            <button class="sortable px-3 py-1 rounded bg-blue-100 text-blue-700" onclick="sortTable('duration')">Sort by Duration</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto w-full">
+          <table class="min-w-full bg-white rounded-xl shadow text-sm md:text-base">
+            <thead>
+              <tr>
+                <th class="py-2 px-4">Candidate</th>
+                <th class="py-2 px-4">Interview Date</th>
+                <th class="py-2 px-4">Interview Time</th>
+                <th class="py-2 px-4">Duration (min)</th>
+                <th class="py-2 px-4">Score</th>
+                <th class="py-2 px-4">Report</th>
+              </tr>
+            </thead>
+            <tbody id="candidates-list"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Report Modal -->
+  <div id="report-modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-2xl p-4 md:p-8 w-[95vw] max-w-xl max-h-[90vh] shadow-lg relative flex flex-col">
+      <button onclick="closeModal()" class="absolute top-2 right-4 text-2xl text-gray-400 hover:text-red-500">&times;</button>
+      <h3 class="text-2xl font-bold mb-4 gradient-text">Interview Report</h3>
+      <div id="modal-report-content" class="text-gray-800 text-base overflow-y-auto flex-1 whitespace-pre-line"></div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    let candidates = [];
+    let sortKey = 'score';
+    let sortAsc = false;
+
+    document.getElementById('companyLoginForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const job_id = this.job_id.value;
+      const password = this.password.value;
+      // TODO: Authenticate company (implement backend check if needed)
+      // Fetch candidates for this job
+      const res = await fetch(`/api/job_reports?job_id=${job_id}&password=${password}`);
+      const data = await res.json();
+      if (data.error) return alert(data.error);
+      candidates = data.candidates;
+      renderTable();
+      document.getElementById('reports-section').classList.remove('hidden');
+      this.classList.add('hidden');
+    };
+
+    function renderTable() {
+      let sorted = [...candidates];
+      if (sortKey === 'score') {
+        sorted.sort((a, b) => sortAsc ? a.score - b.score : b.score - a.score);
+      } else if (sortKey === 'duration') {
+        sorted.sort((a, b) => sortAsc ? a.duration - b.duration : b.duration - a.duration);
+      } else if (sortKey === 'date') {
+        sorted.sort((a, b) => {
+          const d1 = new Date(a.date + 'T' + a.time);
+          const d2 = new Date(b.date + 'T' + b.time);
+          return sortAsc ? d1 - d2 : d2 - d1;
+        });
+      }
+      document.getElementById('candidates-list').innerHTML = sorted.map(c => `
+        <tr>
+          <td class="py-2 px-4">${c.name}</td>
+          <td class="py-2 px-4">${c.date}</td>
+          <td class="py-2 px-4">${c.time}</td>
+          <td class="py-2 px-4">${c.duration}</td>
+          <td class="py-2 px-4">${c.score}</td>
+          <td class="py-2 px-4">
+            <button class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg font-semibold" onclick="showReport('${c.interview_id}')">View</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function sortTable(key) {
+      if (sortKey === key) sortAsc = !sortAsc;
+      else { sortKey = key; sortAsc = false; }
+      renderTable();
+    }
+
+    async function showReport(interview_id) {
+      const res = await fetch(`/api/interview/report_popup?interview_id=${interview_id}`);
+      const data = await res.json();
+      document.getElementById('modal-report-content').innerHTML = marked.parse(data.report || "");
+      document.getElementById('report-modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('report-modal').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>

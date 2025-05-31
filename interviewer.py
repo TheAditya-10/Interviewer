@@ -1,10 +1,12 @@
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
-from langchain_ollama import ChatOllama
 from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_google_genai import ChatGoogleGenerativeAI
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-
-model = ChatOllama(model="phi3:mini", temperature=0.7, max_tokens=512)
+model = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 strOutputParser = StrOutputParser()
 
 system_prompt = PromptTemplate( 
@@ -42,12 +44,18 @@ question_prompt = PromptTemplate(
 
 def get_first_question(candidate_info, job_info, interview_info):
     question_chain = system_prompt | model | strOutputParser
+    prompt_str = system_prompt.format(
+        candidate_info=candidate_info,
+        job_info=job_info,
+        interview_info=interview_info
+    )
     first_question = question_chain.invoke({
         "candidate_info": candidate_info,
         "job_info": job_info,
         "interview_info": interview_info
     })
-    messages = [AIMessage(content=first_question)]
+    messages = [SystemMessage(content=prompt_str)]
+    messages.append(AIMessage(content=first_question))
     return first_question, messages
 
 def get_next_question(messages, interview_info):

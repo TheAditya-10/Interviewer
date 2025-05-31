@@ -5,6 +5,7 @@ from flask import session
 
 import pymysql
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import os
 import wave
@@ -16,6 +17,7 @@ from dbmodel import db, Job, Candidate, Interview
 from resumereader import extract_candidate_data
 from scheduler import get_skill_order
 from interviewer import get_first_question, get_next_question, record_answer
+from report import generate_report, score_report
 
 pymysql.install_as_MySQLdb()
 
@@ -34,7 +36,7 @@ def get_jobs():
     job_list = [
         {
             "J_id": job.J_id,
-            "skill_req": job.skill_req
+            "skill_req": job.job_title,
         } for job in jobs
     ]
     return jsonify({"jobs": job_list})
@@ -60,14 +62,17 @@ def apply_job():
     candidate = None
     if c_id:
         password = request.form.get('password')
-        candidate = Candidate.session.get(int(c_id))
+        candidate = Candidate.query.get(int(c_id))
         if not candidate:
             return jsonify({"message": "Candidate ID not found."}), 400
-        if not password or candidate.password != password:
+        if not password or not check_password_hash(candidate.password, password):
             return jsonify({"message": "Incorrect password."}), 400
     else:
         if not resume or not resume.filename.endswith('.pdf') or not create_password:
             return jsonify({"message": "Resume and password required."}), 400
+        confirm_password = request.form.get('confirm_password')
+        if not confirm_password or create_password != confirm_password:
+            return jsonify({"message": "Passwords do not match."}), 400
         filename = secure_filename(resume.filename)
         resume_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         resume.save(resume_path)
@@ -75,10 +80,11 @@ def apply_job():
         dob = candidate_data.get('dob')
         if not dob or dob.strip() == "":
             dob = "2000-01-01"
+        from werkzeug.security import generate_password_hash
         candidate = Candidate(
             name=candidate_data.get('name', 'Unknown'),
             dob=dob,
-            password=create_password,
+            password=generate_password_hash(create_password),
             skills=candidate_data.get('skills', []),
             soft_skills=candidate_data.get('soft_skills', []),
             achievements=candidate_data.get('achievements', []),
@@ -89,17 +95,16 @@ def apply_job():
         db.session.commit()
 
     # Fetch candidate and job skills
-    candidate_skills = candidate.skills if candidate.skills else []
+    candidate_skills = candidate.skills if candidate and candidate.skills else []
     print("Candidate skills:", candidate_skills)
     job_obj = db.session.get(Job, job_id)
-    candidate = db.session.get(Candidate, c_id)
     job_skills = job_obj.skill_req if job_obj and job_obj.skill_req else []
     print("Job skills:", job_skills)
     # Get skill order using LLM
     skill_order = get_skill_order(candidate_skills, job_skills)
 
     # Check for duplicate interview
-    existing_interview = Interview.session.filter_by(J_id=int(job_id), C_id=candidate.C_id).first()
+    existing_interview = db.session.query(Interview).filter_by(J_id=int(job_id), C_id=candidate.C_id).first()
     if existing_interview:
         return jsonify({"message": "You have already applied for this job."}), 400
 
@@ -112,14 +117,14 @@ def apply_job():
         skill_order=skill_order,
         report="",
         start_datetime=start_datetime,
-        duration=30
+        duration=0
     )
     db.session.add(new_interview)
     db.session.commit()
 
     return jsonify({
         "message": "Application submitted successfully!",
-        "c_id": candidate.C_id,
+        "c_id": f"{candidate.C_id:04d}",  # 4-digit zero-padded
         "interview_date": interview_date,
         "interview_time": interview_time,
         "job_id": job_id
@@ -128,13 +133,18 @@ def apply_job():
 @app.route('/api/job', methods=['POST'])
 def post_job():
     data = request.form if request.form else request.json
+    job_title = data.get('job_title')
     required_experience = data.get('required_experience')
     skill_req = data.get('skill_req')
     min_qualification = data.get('min_qualification')
     soft_skill_req = data.get('soft_skill_req')
+    password = data.get('password')
+    confirm_password = data.get('confirm_password')
 
-    if not (required_experience and skill_req and min_qualification and soft_skill_req):
+    if not (job_title and required_experience and skill_req and min_qualification and soft_skill_req and password and confirm_password):
         return jsonify({"message": "All fields are required."}), 400
+    if password != confirm_password:
+        return jsonify({"message": "Passwords do not match."}), 400
 
     import json
     try:
@@ -143,11 +153,14 @@ def post_job():
     except Exception:
         return jsonify({"message": "Skill fields must be valid JSON arrays."}), 400
 
+    hashed_password = generate_password_hash(password)
     job = Job(
+        job_title=job_title,
         required_experience=required_experience,
         skill_req=skill_req_json,
         min_qualification=min_qualification,
-        soft_skill_req=soft_skill_req_json
+        soft_skill_req=soft_skill_req_json,
+        password=hashed_password
     )
     db.session.add(job)
     db.session.commit()
@@ -168,6 +181,10 @@ def interview():
 @app.route('/job')
 def job():
     return render_template('job.html')
+
+@app.route('/reports')
+def reports():
+    return render_template('reports.html')
 
 
 # vosk_model = vosk.Model("vosk-model-small-en-us-0.15")  # Path to your Vosk model
@@ -200,7 +217,7 @@ def login():
     password = data.get('password')
     candidate = Candidate.query.get(int(c_id))
     print(f"Candidate ID: {c_id}, Password: {password}")
-    if not candidate or candidate.password != password:
+    if not candidate or not check_password_hash(candidate.password, password):
         return jsonify({"error": "Invalid credentials"}), 401
     session['c_id'] = candidate.C_id
     return jsonify({"message": "Login successful"})
@@ -219,7 +236,7 @@ def my_interviews():
             "job_id": job.J_id,
             "date": interview.start_datetime.strftime("%Y-%m-%d"),
             "time": interview.start_datetime.strftime("%H:%M"),
-            "job_title": job.skill_req  # or another field
+            "job_title": job.job_title  # or another field
         })
     return jsonify(result)
 
@@ -263,7 +280,103 @@ def interview_answer():
     session['messages'] = [m.dict() for m in msg_objs]
     return jsonify({"question": next_question, "messages": session['messages']})
 
-with app.app_context():
+@app.route('/api/interview/report', methods=['POST'])
+def interview_report():
+    data = request.json
+    messages = data.get('messages')
+    job_id = data.get('job_id')
+    if not messages or not job_id:
+        return jsonify({"error": "Missing messages or job_id"}), 400
+
+    # Convert messages (list of dicts) to readable chat history string
+    from langchain.schema import AIMessage, HumanMessage
+    chat_history = ""
+    for msg in messages:
+        if msg['type'] == 'ai':
+            chat_history += f"AI: {msg['content']}\n"
+        else:
+            chat_history += f"Candidate: {msg['content']}\n"
+
+    # Get job skills from DB
+    job = db.session.get(Job, int(job_id))
+    job_skills = job.skill_req if job else []
+
+    # Generate report
+    report = generate_report(chat_history, job_skills)
+    return jsonify({"report": report})
+
+@app.route('/api/job_reports')
+def job_reports():
+    job_id = int(request.args.get('job_id'))  # <-- convert to int
+    password = request.args.get('password')
+    job = db.session.get(Job, job_id)
+    if not job:
+        return jsonify({"error": "Invalid Job ID"}), 400
+    if not password or not check_password_hash(job.password, password):
+        return jsonify({"error": "Invalid password"}), 401
+    # Fetch all interviews for this job
+    interviews = Interview.query.filter_by(J_id=job_id).all()
+    candidates = []
+    for iv in interviews:
+        candidate = db.session.get(Candidate, iv.C_id)
+        candidates.append({
+            "interview_id": f"{iv.J_id}_{iv.C_id}",
+            "name": candidate.name if candidate else "Unknown",
+            "score": iv.score,
+            "duration": iv.duration,
+            "feedback": iv.report[:40] + "..." if iv.report else "",
+            "date": iv.start_datetime.strftime("%Y-%m-%d"),
+            "time": iv.start_datetime.strftime("%H:%M"),
+        })
+    return jsonify({"candidates": candidates})
+
+@app.route('/api/interview/report_popup')
+def interview_report_popup():
+    interview_id = request.args.get('interview_id')
+    job_id, c_id = map(int, interview_id.split('_'))
+    iv = Interview.query.filter_by(J_id=job_id, C_id=c_id).first()
+    if not iv:
+        return jsonify({"error": "Interview not found"}), 404
+    return jsonify({"report": iv.report or "No report available."})
+
+@app.route('/api/interview/end', methods=['POST'])
+def end_interview():
+    data = request.json
+    interview_id = data.get('interview_id')
+    duration = data.get('duration')
+
+    if not interview_id or duration is None:
+        return jsonify({"error": "Missing interview_id or duration"}), 400
+
+    job_id, c_id = map(int, interview_id.split('_'))
+    interview = Interview.query.filter_by(J_id=job_id, C_id=c_id).first()
+    if not interview:
+        return jsonify({"error": "Interview not found"}), 404
+
+    # Get job skills
+    job = Job.query.get(job_id)
+    job_skills = job.skill_req if job else []
+
+    # Get messages from session
+    messages = session.get('messages')
+    if not messages:
+        return jsonify({"error": "No interview messages found in session."}), 400
+
+    # Generate report and score
+    report = generate_report(messages, job_skills, duration)
+    score = score_report(report)
+
+    interview.duration = duration
+    interview.report = report
+    interview.score = score
+    db.session.commit()
+    return jsonify({
+        "message": "Interview ended successfully.",
+        "report": report,
+        "score": score
+    })
+if __name__ == "__main__":
+    app.run(debug=True)
     db.create_all()
 
 if __name__ == "__main__":

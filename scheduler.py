@@ -1,8 +1,11 @@
 from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_ollama import OllamaLLM
+from langchain_google_genai import ChatGoogleGenerativeAI
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-model = OllamaLLM(model="phi3:mini", temperature=0.25)
+model = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.7)
 jsonparser = JsonOutputParser()
 
 def get_skill_order(candidate_skills, job_skills):

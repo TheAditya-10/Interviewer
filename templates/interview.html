@@ -80,6 +80,9 @@
           <li>Questions will be presented as both text and voice.</li>
           <li>Click "Got it!" to begin your interview.</li>
         </ul>
+        <div id="timer-container" class="flex flex-col items-center mb-4">
+          <span id="interview-timer" class="text-lg font-bold text-blue-700"></span>
+        </div>
         <div class="flex justify-center">
           <button id="got-it-btn" class="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg hover:bg-blue-700 transition text-lg font-semibold">Got it!</button>
         </div>
@@ -88,19 +91,33 @@
   </div>
 
   <!-- Fullscreen Interview UI (hidden until "Got it!") -->
-  <div id="interview-ui" class="hidden fixed inset-0 flex h-screen w-screen z-20 bg-white">
+  <div id="interview-ui" class="hidden fixed inset-0 flex h-screen w-screen z-20" style="background: linear-gradient(120deg, #e0e7ff 0%, #a5f3fc 100%);">
     <!-- Left: Interviewer Avatar -->
-    <div class="hidden md:flex flex-col items-center justify-center w-1/2 bg-gradient-to-br from-blue-200 to-cyan-100">
-      <img src="https://api.dicebear.com/7.x/bottts/svg?seed=AI-Interviewer" alt="AI Interviewer" class="w-64 h-64 rounded-full avatar-shadow mb-8">
-      <h2 class="text-3xl font-bold gradient-text mb-2">AI Interviewer</h2>
-      <p class="text-lg text-gray-600 text-center max-w-xs">Your professional interviewer. Answer honestly and confidently!</p>
+    <div class="hidden md:flex flex-col items-center justify-center w-1/2 relative">
+      <!-- Animated SVG rings (centered around avatar) -->
+      <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" style="width: 320px; height: 320px;">
+        <svg id="avatar-speaking-rings" width="320" height="320" viewBox="0 0 320 320" style="opacity:0; transition:opacity 0.3s;">
+          <circle cx="160" cy="160" r="110" fill="none" stroke="#38bdf8" stroke-width="6" opacity="0.25">
+            <animate attributeName="r" values="110;140;110" dur="1.2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.25;0.12;0.25" dur="1.2s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="160" cy="160" r="140" fill="none" stroke="#6366f1" stroke-width="4" opacity="0.18">
+            <animate attributeName="r" values="140;170;140" dur="1.5s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.18;0.08;0.18" dur="1.5s" repeatCount="indefinite"/>
+          </circle>
+        </svg>
+      </div>
+      <!-- Avatar image -->
+      <img id="avatar-img" src="https://api.dicebear.com/7.x/bottts/svg?seed=AI-Interviewer" alt="AI Interviewer" class="w-64 h-64 rounded-full avatar-shadow mb-7 relative z-20">
     </div>
     <!-- Right: Q&A Section -->
-    <div class="flex-1 flex flex-col justify-between h-full bg-white">
+    <div class="flex-1 flex flex-col justify-between h-full">
       <!-- Question Display -->
       <div class="flex flex-col items-center justify-center h-2/5 px-6 pt-12">
-        <div id="question-box" class="bg-blue-50 rounded-2xl shadow-lg p-8 w-full max-w-2xl text-2xl text-gray-800 font-semibold text-center min-h-[120px] flex items-center justify-center">
-          <span id="current-question">Welcome! We are starting Interview soon...</span>
+        <div id="question-box" class="relative w-full max-w-2xl mx-auto my-4 p-8 rounded-3xl shadow-xl text-2xl font-semibold text-center transition-all duration-300"
+             style="background: linear-gradient(120deg, #f0fdfa 60%, #a5f3fc 100%); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.10); border: 1.5px solid #bae6fd;">
+          <span id="current-question" class="block text-gray-900"></span>
+          <div id="question-typing-cursor" class="inline-block w-2 h-7 align-middle bg-blue-400 animate-pulse ml-1"></div>
         </div>
       </div>
       <!-- Answer Input -->
@@ -117,8 +134,49 @@
         <span id="recording-indicator" class="text-red-600 font-bold mt-3 hidden">● Recording...</span>
       </div>
     </div>
-  </div>
 
+    <!-- Timer at top-right -->
+    <div id="interview-timer-main" class="fixed top-6 right-10 z-30 bg-white/80 rounded-xl px-6 py-2 shadow-lg text-blue-700 font-bold text-lg flex items-center gap-2" style="backdrop-filter: blur(4px);">
+      <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="2" fill="none"/>
+        <path d="M12 9v4l2 2" stroke="currentColor" stroke-width="2" fill="none"/>
+      </svg>
+      <span id="live-timer">00:00</span>
+    </div>
+
+    <!-- End Interview Button at bottom-right -->
+    <button id="end-interview-btn" class="fixed bottom-8 right-10 z-30 bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-2xl text-lg font-bold shadow-xl transition flex items-center gap-2">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+      End Interview
+    </button>
+
+    <!-- Confirmation Modal -->
+    <div id="end-confirm-modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+      <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center">
+        <h2 class="text-2xl font-bold mb-4 text-red-600">End Interview?</h2>
+        <p class="mb-6 text-gray-700">Are you sure you want to end your interview? You won't be able to answer more questions.</p>
+        <div class="flex justify-center gap-6">
+          <button id="cancel-end-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-lg font-semibold">Cancel</button>
+          <button id="confirm-end-btn" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-semibold">Yes, End</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <!-- Final Thank You Screen -->
+  <div id="final-screen" class="fixed inset-0 flex flex-col items-center justify-center z-50 hidden" style="background: linear-gradient(120deg, #e0e7ff 0%, #a5f3fc 100%);">
+    <div class="bg-white rounded-3xl shadow-2xl p-12 flex flex-col items-center">
+      <svg class="w-20 h-20 text-green-500 mb-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2l4-4"/>
+      </svg>
+      <h2 class="text-3xl font-bold mb-4 gradient-text">Thank You!</h2>
+      <p class="text-lg text-gray-700 mb-2">Your interview was conducted and recorded successfully.</p>
+      <p class="text-blue-700 font-semibold">We will reach out to you soon.</p>
+    </div>
+  </div>
   <script src="https://cdn.jsdelivr.net/npm/recorderjs@0.1.0/dist/recorder.js"></script>
   <script>
     // TTS function
@@ -130,7 +188,15 @@
         const voices = window.speechSynthesis.getVoices();
         const markVoice = voices.find(v => v.name === "Microsoft Mark - English (United States)");
         if (markVoice) utter.voice = markVoice;
-        if (onEndCallback) utter.onend = onEndCallback;
+
+        // Show speaking animation
+        document.getElementById('avatar-speaking-rings').style.opacity = 1;
+
+        utter.onend = function() {
+          // Hide speaking animation
+          document.getElementById('avatar-speaking-rings').style.opacity = 0;
+          if (onEndCallback) onEndCallback();
+        };
         window.speechSynthesis.speak(utter);
       }
     }
@@ -158,16 +224,17 @@
         // Fetch interviews
         const interviewsRes = await fetch('/api/my_interviews');
         const interviews = await interviewsRes.json();
+        window.interviews = interviews; // Store globally for later use
         const listDiv = document.getElementById('interview-list');
         listDiv.innerHTML = '';
         interviews.forEach(iv => {
           const div = document.createElement('div');
           div.className = 'flex items-center justify-between bg-blue-50 rounded-lg p-4 shadow';
           div.innerHTML = `<div>
-            <div class="font-semibold">Job ID: ${iv.job_id}</div>
+            <div class="font-semibold">Job ID: ${iv.job_id} | ${iv.job_title}</div>
             <div class="text-gray-600 text-sm">Date: ${iv.date} | Time: ${iv.time}</div>
           </div>
-          <button class="start-interview-btn bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold" data-interview="${iv.interview_id}">Start</button>`;
+          <button class="start-interview-btn bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold" data-interview="${iv.interview_id}">Go on Interview Board</button>`;
           listDiv.appendChild(div);
         });
         interviewListSection.classList.remove('hidden');
@@ -177,19 +244,68 @@
       }
     };
 
-    // Step 2: Show Instructions when "Start" is clicked
+    // Step 2: Show Instructions when "Go on Interview Board" is clicked
     document.getElementById('interview-list').onclick = function(e) {
       if (e.target.classList.contains('start-interview-btn')) {
-        sessionStorage.setItem('interview_id', e.target.dataset.interview);
+        const interviewId = e.target.dataset.interview;
+        // Find the interview object to get date/time
+        const interviewObj = window.interviews.find(iv => iv.interview_id === interviewId);
+        sessionStorage.setItem('interview_id', interviewId);
+        sessionStorage.setItem('interview_date', interviewObj.date);
+        sessionStorage.setItem('interview_time', interviewObj.time);
         interviewListSection.classList.add('hidden');
         instructionsSection.classList.remove('hidden');
+        showInterviewTimer(); // Call timer logic here
       }
     };
+
+    // Timer logic for "Got it!" button in instructions panel
+    function showInterviewTimer() {
+      const gotItBtn = document.getElementById('got-it-btn');
+      const timerSpan = document.getElementById('interview-timer');
+      gotItBtn.disabled = true;
+      gotItBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      timerSpan.textContent = "Calculating interview time...";
+
+      const dateStr = sessionStorage.getItem('interview_date');
+      const timeStr = sessionStorage.getItem('interview_time');
+      if (!dateStr || !timeStr) {
+        timerSpan.textContent = "Interview time not found.";
+        return;
+      }
+      // Interview scheduled time (local time)
+      const interviewDateTime = new Date(`${dateStr}T${timeStr}`);
+      // 2 minutes before scheduled time
+      const unlockTime = new Date(interviewDateTime.getTime() - 2 * 60 * 1000);
+
+      function updateTimer() {
+        const now = new Date();
+        if (now >= unlockTime) {
+          gotItBtn.disabled = false;
+          gotItBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+          timerSpan.textContent = "You can now start your interview!";
+          return;
+        }
+        let diff = unlockTime - now;
+        const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+        diff %= (24 * 60 * 60 * 1000);
+        const hours = Math.floor(diff / (60 * 60 * 1000));
+        diff %= (60 * 60 * 1000);
+        const mins = Math.floor(diff / (60 * 1000));
+        diff %= (60 * 1000);
+        const secs = Math.floor(diff / 1000);
+
+        timerSpan.textContent = `Your Interview will start in ${days} Days ${hours} hrs ${mins} min ${secs < 10 ? '0' : ''}${secs} sec`;
+        setTimeout(updateTimer, 1000);
+      }
+      updateTimer();
+    }
 
     // Step 3: Show Interview UI when "Got it!" is clicked
     document.getElementById('got-it-btn').onclick = async function() {
       centerUI.classList.add('hidden');
       interviewUI.classList.remove('hidden');
+      startInterviewTimer();
       // Start interview
       const interview_id = sessionStorage.getItem('interview_id');
       const res = await fetch('/api/interview/start', {
@@ -212,8 +328,53 @@
     let isRecording = false, recorder, audioContext, stream;
 
     function showQuestion(text) {
-      questionBox.textContent = text;
-      speak(text);
+      const questionBox = document.getElementById('current-question');
+      const cursor = document.getElementById('question-typing-cursor');
+      questionBox.textContent = '';
+      cursor.style.display = 'inline-block';
+
+      // Prepare TTS
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new window.SpeechSynthesisUtterance(text);
+        utter.lang = 'en-US';
+        const voices = window.speechSynthesis.getVoices();
+        const markVoice = voices.find(v => v.name === "Microsoft Mark - English (United States)");
+        if (markVoice) utter.voice = markVoice;
+
+        // Show speaking animation
+        document.getElementById('avatar-speaking-rings').style.opacity = 1;
+
+        // Animate text in sync with TTS
+        let i = 0;
+        utter.onboundary = function(event) {
+          // event.charIndex gives the index of the character being spoken
+          i = event.charIndex;
+          questionBox.textContent = text.slice(0, i + 1);
+        };
+
+        utter.onend = function() {
+          // Ensure full text is shown at the end
+          questionBox.textContent = text;
+          cursor.style.display = 'none';
+          document.getElementById('avatar-speaking-rings').style.opacity = 0;
+        };
+
+        window.speechSynthesis.speak(utter);
+      } else {
+        // Fallback: just typewriter animation
+        let i = 0;
+        function typeWriter() {
+          if (i < text.length) {
+            questionBox.textContent += text.charAt(i);
+            i++;
+            setTimeout(typeWriter, 18);
+          } else {
+            cursor.style.display = 'none';
+          }
+        }
+        typeWriter();
+      }
     }
 
     sendBtn.onclick = async function() {
@@ -273,6 +434,89 @@
         });
       }
     };
+
+    // --- Timer and End Interview logic ---
+    const liveTimerSpan = document.getElementById('live-timer');
+    let interviewStartTime, interviewTimerInterval, autoEndTimeout;
+    const MAX_DURATION_SEC = 45 * 60; // 45 minutes in seconds
+
+    function startInterviewTimer() {
+      interviewStartTime = Date.now();
+      const timerSpan = document.getElementById('live-timer');
+      function updateTimer() {
+        const elapsed = Math.floor((Date.now() - interviewStartTime) / 1000);
+        const mins = Math.floor(elapsed / 60);
+        const secs = elapsed % 60;
+        timerSpan.textContent = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+      }
+      updateTimer();
+      interviewTimerInterval = setInterval(updateTimer, 1000);
+
+      // Set auto-end after 45 minutes
+      autoEndTimeout = setTimeout(() => {
+        autoEndInterview();
+      }, MAX_DURATION_SEC * 1000);
+    }
+
+    function stopInterviewTimer() {
+      clearInterval(interviewTimerInterval);
+      clearTimeout(autoEndTimeout);
+      const elapsed = Math.floor((Date.now() - interviewStartTime) / 1000);
+      // If auto-ended, force 45 min, else round up
+      return Math.min(Math.ceil(elapsed / 60), 45);
+    }
+
+    // End Interview button click
+    const endBtn = document.getElementById('end-interview-btn');
+    const modal = document.getElementById('end-confirm-modal');
+    const cancelEndBtn = document.getElementById('cancel-end-btn');
+    const confirmEndBtn = document.getElementById('confirm-end-btn');
+    const finalScreen = document.getElementById('final-screen');
+
+    endBtn.onclick = () => {
+      modal.classList.remove('hidden');
+    };
+
+    cancelEndBtn.onclick = () => {
+      modal.classList.add('hidden');
+    };
+
+    confirmEndBtn.onclick = async () => {
+      modal.classList.add('hidden');
+      // Stop timer and get duration
+      const duration = stopInterviewTimer();
+      // Send duration to backend
+      const interview_id = sessionStorage.getItem('interview_id');
+      await fetch('/api/interview/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interview_id, duration })
+      });
+      // Show thank you screen
+      finalScreen.classList.remove('hidden');
+      interviewUI.classList.add('hidden');
+    };
+
+    async function autoEndInterview() {
+      // Stop timer and set duration to 45
+      stopInterviewTimer();
+      const interview_id = sessionStorage.getItem('interview_id');
+      await fetch('/api/interview/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interview_id, duration: 45 })
+      });
+      // Show thank you screen
+      document.getElementById('final-screen').classList.remove('hidden');
+      document.getElementById('interview-ui').classList.add('hidden');
+      alert("Your interview has ended automatically after 45 minutes.");
+    }
+
+    // Show final screen (thank you message)
+    function showFinalScreen() {
+      document.getElementById('interview-ui').classList.add('hidden');
+      document.getElementById('final-screen').classList.remove('hidden');
+    }
   </script>
 </body>
 </html>

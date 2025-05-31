@@ -5,10 +5,12 @@ db = SQLAlchemy()
 class Job(db.Model):
     __tablename__ = 'job'
     J_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    job_title = db.Column(db.String(255), nullable=False)  # <-- Add this line
     required_experience = db.Column(db.String(50), nullable=False)
     skill_req = db.Column(db.JSON, nullable=False)
     min_qualification = db.Column(db.String(255), nullable=False)
     soft_skill_req = db.Column(db.JSON, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
 
     interviews = db.relationship("Interview", back_populates="job")
 
@@ -32,7 +34,7 @@ class Interview(db.Model):
     C_id = db.Column(db.Integer, db.ForeignKey('candidate.C_id'), nullable=False)
     score = db.Column(db.Integer, nullable=False)
     skill_order = db.Column(db.JSON, nullable=False)
-    report = db.Column(db.String(1024), nullable=True)
+    report = db.Column(db.Text, nullable=True)
     start_datetime = db.Column(db.DateTime, nullable=False)
     duration = db.Column(db.Integer, nullable=False)  # duration in minutes
 
