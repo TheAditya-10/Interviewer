@@ -67,13 +67,23 @@ WATCH DEMO VIDEO HERE
      ```
      GEMINI_API_KEY=your_gemini_api_key
      ```
+     
+5. **Set Up the MySQL Database**:
+   - Create a database named `Interview` in your MySQL server.
+   - Add a `config.py` file in the root directory with the following content:
 
-5. **Run the Application**:
+     ```python
+     SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:Adi!1%40T@localhost/Interview'
+     SQLALCHEMY_TRACK_MODIFICATIONS = False
+     SECRET_KEY = 'your_secret_key_here'
+     ```
+
+6. **Run the Application**:
    ```bash
    python app.py
    ```
 
-6. **Access the Application**:
+7. **Access the Application**:
    - Open `http://localhost:5000` in your browser.
 
 ---
